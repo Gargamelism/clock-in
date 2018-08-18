@@ -6,7 +6,8 @@
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [cheshire "5.8.0"]
                  [clj-time "0.14.4"]
-                 [clj-http "3.9.0"]]
+                 [clj-http "3.9.0"]
+                 [org.clojure/tools.cli "0.3.7"]]
   :main clock-in.core
   :aot [clock-in.core])
 

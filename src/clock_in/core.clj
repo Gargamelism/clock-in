@@ -3,7 +3,8 @@
             [clj-time.core :as time]
             [clj-time.format :as time-format]
             [clj-http.client :as client]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [clojure.tools.cli :refer [parse-opts]])
   (:gen-class))
 
 (def ^:private time-watch-login-url "https://checkin.timewatch.co.il/punch/punch2.php")
@@ -62,35 +63,41 @@
 (def ^:private date-formatter (time-format/formatters :year-month-day))
 
 (defn- update-day-request
-  [{:keys [user-id company-id]} first-month-day-str edited-day-str]
-  {:e user-id
-   :tl user-id
-   :c company-id
-   :d edited-day-str
-   :jd first-month-day-str
-   :atypehidden "0"
-   :inclcontracts "1"
-   :job "14095"
-   :allowabsence "3"
-   :allowremarks "0"
-   :task0 "0"
-   :what0 "1"
-   :emm0 "30" ; start minutes
-   :ehh0 "08" ; start hour
-   :xmm0 "30" ; end minutes
-   :xhh0 "17" ; end hour
-   :task1 "0"
-   :what1 "1"
-   :task2 "0"
-   :what2 "1"
-   :task3 "0"
-   :what3 "1"
-   :task4 "0"
-   :what4 "1"
-   :excuse "0"
-   :atype "0"
-   :B1.x "43"
-   :B1.y "13"})
+  [{:keys [user-id company-id michael?]} first-month-day-str edited-day-str]
+  (let [hours (if michael?
+                {:emm0 "30"
+                 :ehh0 "12"
+                 :xmm0 "30"
+                 :xhh0 "21"}
+                {:emm0 "30"
+                 :ehh0 "08"
+                 :xmm0 "30"
+                 :xhh0 "17"})]
+    (merge hours
+           {:e user-id
+            :tl user-id
+            :c company-id
+            :d edited-day-str
+            :jd first-month-day-str
+            :atypehidden "0"
+            :inclcontracts "1"
+            :job "14095"
+            :allowabsence "3"
+            :allowremarks "0"
+            :task0 "0"
+            :what0 "1"
+            :task1 "0"
+            :what1 "1"
+            :task2 "0"
+            :what2 "1"
+            :task3 "0"
+            :what3 "1"
+            :task4 "0"
+            :what4 "1"
+            :excuse "0"
+            :atype "0"
+            :B1.x "43"
+            :B1.y "13"})))
 
 (let [friday 5
       saturday 6]
@@ -109,7 +116,7 @@
         (if-not (time/after? edited-date end-date)
           (let [edited-day-str (time-format/unparse date-formatter edited-date)
                 referer (format update-days-referer-url company-id user-id edited-day-str first-month-day-str user-id)]
-            (when-let [response (client/post update-days-url
+            (when-let [response (client/post update-days-url 
                                              {:headers (assoc post-login-headers
                                                               "Cookie" cookies
                                                               "Referer" referer)
@@ -118,11 +125,28 @@
               (println "updating:" edited-day-str)
               (recur (time/plus edited-date (time/days 1))))))))))
 
+(defn- michael?
+  [flags]
+  (some #(= "--michael" %) flags))
+
+(def cli-options
+  [["-m" "--michael"
+    :id :michael?]
+   ["-u" "--user USER"
+    :id :user]
+   ["-p" "--password PASSWORD"
+    :id :password]
+   ["-c" "--company COMPANY"
+    :id :company]
+   ["-h" "--help"]])
+
 (defn -main
   [& args]
-  (if (= (count args) 0)
-    (println "usage: java -jar clock-in.jar <USER-NUM> <PASSWORD> <COMPANY-ID>")
-    (let [[user-num pw company-id] args]
-      (some-> (login user-num pw company-id)
-              (update-days))
+  (if (= (count args) 0) 
+    (println "usage: java -jar clock-in.jar --michael -u <USER-NUM> -p <PASSWORD> -c <COMPANY-ID>")
+    (let [{:keys [michael?
+                  user
+                  password
+                  company]} (:options (parse-opts args cli-options))]
+      (update-days (assoc (login user password company) :michael? michael?))
       (println "done!"))))
