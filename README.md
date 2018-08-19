@@ -9,7 +9,7 @@ Download the jar and run it.
 or, in case you watch Netflix instead of going to work in the morning/bla bla bla and come to work at 12:30
 ```java -jar clock-in.jar --michael -u <USER-NUM> -p <PASSWORD> -c <COMPANY-ID>```
 
-No args will provide the "no-michael" version.
+No args will provide the a help string.
 
 Filled times are 8:30am - 17:30 Sunday-Thursday, unless michael, in that case 12:30-21:30.
 
