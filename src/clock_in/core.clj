@@ -105,9 +105,16 @@
     [date]
     (#{friday saturday} (time/day-of-week date))))
 
+(defn- requested-month
+  [{:keys [month-override]}]
+  (let [now (time/now)]
+    (if-not month-override
+      now
+      (time/plus now (time/months month-override)))))
+
 (defn- update-days
   [{:keys [company-id user-id cookies] :as request}]
-  (let [start-date (time/first-day-of-the-month- (time/now))
+  (let [start-date (time/first-day-of-the-month- (requested-month request))
         end-date (time/last-day-of-the-month start-date)
         first-month-day-str (time-format/unparse date-formatter start-date)]
     (loop [edited-date start-date]
@@ -116,7 +123,7 @@
         (if-not (time/after? edited-date end-date)
           (let [edited-day-str (time-format/unparse date-formatter edited-date)
                 referer (format update-days-referer-url company-id user-id edited-day-str first-month-day-str user-id)]
-            (when-let [response (client/post update-days-url 
+            (when-let [response (client/post update-days-url
                                              {:headers (assoc post-login-headers
                                                               "Cookie" cookies
                                                               "Referer" referer)
@@ -125,28 +132,57 @@
               (println "updating:" edited-day-str)
               (recur (time/plus edited-date (time/days 1))))))))))
 
-(defn- michael?
-  [flags]
-  (some #(= "--michael" %) flags))
+(defn- required-args?
+  [{:keys [user password company]}]
+  (and user password company))
 
 (def cli-options
-  [["-m" "--michael"
-    :id :michael?]
-   ["-u" "--user USER"
+  [["-u" "--user USER" "user number"
     :id :user]
-   ["-p" "--password PASSWORD"
+   ["-p" "--password PASSWORD" "password"
     :id :password]
-   ["-c" "--company COMPANY"
+   ["-c" "--company COMPANY" "company number"
     :id :company]
+   ["-m" "--michael" "work 12:30-21:30"
+    :id :michael?]
+   ["-n" "--next-month" "fill next month"
+    :id :next-month?]
+   ["-p" "--previous-month" "fill previous month"
+    :id :previous-month?]
    ["-h" "--help"]])
+
+(defn- process-args
+  [options]
+  (let [{:keys [next-month? previous-month?]} options]
+    (-> (dissoc options :next-month? :previous-month?)
+        (assoc :month-override (cond
+                                 next-month? 1
+                                 previous-month? -1
+                                 :else nil)))))
+
+(defn- validate-args
+  [args]
+  (let [{:keys [options arguments errors summary]} (parse-opts args cli-options)]
+    (cond
+      (:help options) {:exit-message summary :ok? true}
+      errors {:exit-message (str/join "\n" (concat ["ERROR!"] errors))}
+      (required-args? options) (process-args options)
+      :else {:exit-message summary})))
+
+(defn- exit
+  [status msg]
+  (println msg)
+  (System/exit status))
 
 (defn -main
   [& args]
-  (if (= (count args) 0) 
-    (println "usage: java -jar clock-in.jar --michael -u <USER-NUM> -p <PASSWORD> -c <COMPANY-ID>")
-    (let [{:keys [michael?
-                  user
-                  password
-                  company]} (:options (parse-opts args cli-options))]
-      (update-days (assoc (login user password company) :michael? michael?))
-      (println "done!"))))
+  (let [{:keys [user
+                password
+                company
+                exit-message
+                ok?] :as options} (validate-args args)]
+    (if exit-message
+      (exit (if ok? 0 1) exit-message)
+      (update-days (merge (login user password company)
+                          options)))
+    (println "done!")))
