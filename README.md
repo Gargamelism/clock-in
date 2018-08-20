@@ -12,6 +12,7 @@ or, in case you watch Netflix instead of going to work in the morning/bla bla bl
 No args will provide the a help string.
 
 Filled times are 8:30am - 17:30 Sunday-Thursday, unless michael, in that case 12:30-21:30.
+Filled month is current unless using the ```--next-month``` or ```--previous-month``` flags.
 
 ## License
 
