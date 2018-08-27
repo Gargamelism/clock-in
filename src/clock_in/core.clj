@@ -4,32 +4,35 @@
             [clj-time.format :as time-format]
             [clj-http.client :as client]
             [clojure.core.strint :refer [<<]]
+            [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.tools.cli :refer [parse-opts]]
             [hickory.core :as html]
             [hickory.select :as select])
   (:gen-class))
 
+(defn- remove-extension
+  [^String file-name]
+  (subs file-name 0 (str/index-of file-name ".")))
+
 (defn- exit
   [status msg]
   (println msg)
   (System/exit status))
 
-(def ^:private time-watch-login-url "https://checkin.timewatch.co.il/punch/punch2.php")
-
-(def ^:private login-map
-  {:basic-auth ["user" "password" "company"]
-   :headers {"Connection" "keep-alive"
-             "Pragma" "no-cache"
-             "Cache-Control" "no-cache"
-             "Origin" "https://checkin.timewatch.co.il"
-             "Upgrade-Insecure-Requests" " 1"
-             "Content-Type" "application/x-www-form-urlencoded"
-             "User-Agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36"
-             "Accept" "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8"
-             "Referer" "https://checkin.timewatch.co.il/punch/punch.php"
-             "Accept-Encoding" "gzip, deflate, br"
-             "Accept-Language" "en-US,en;q=0.9,he;q=0.8"}})
+(def config (atom {}))
+(def load-config!
+  (doseq [resource-name ["urls.edn" "headers.edn" "requests.edn"]]
+    (try
+      (with-open [resource (io/reader (io/resource resource-name))]
+        (swap! config assoc
+               (keyword (remove-extension resource-name))
+               (edn/read (java.io.PushbackReader. resource))))
+      (catch java.io.IOException e
+        (exit 1 (format "Couldn't open '%s': %s\n" resource-name (.getMessage e))))
+      (catch RuntimeException e
+        (exit 1 (format "Error parsing edn file '%s': %s\n" resource-name (.getMessage e)))))))
 
 (defn- html->hiccup
   [^String text]
@@ -64,31 +67,15 @@
 (def ^:private login-query-str "comp=%s&name=%s&pw=%s&B1.x=-425&B1.y=-354")
 (defn- login
   [user-num password company-id]
-  (when-let [response (checked-request! client/post time-watch-login-url (assoc login-map
-                                                                                :body (format login-query-str company-id user-num password)))]
+  (when-let [response (checked-request! client/post
+                                        (get-in @config [:urls :time-watch-login])
+                                        (assoc (get-in @config [:headers :login-map])
+                                               :body (format login-query-str company-id user-num password)))]
     {:cookies (cookies (response :cookies))
      :user-id (user-id (response :body))
      :company-id company-id}))
 
-(def ^:private post-login-headers
-  {"Host" "checkin.timewatch.co.il"
-   "Connection" "keep-alive"
-   "Pragma" "no-cache"
-   "Cache-Control" "no-cache"
-   "Upgrade-Insecure-Requests" "1"
-   "User-Agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36"
-   "Accept" "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8"
-   "Referer" "http://checkin.timewatch.co.il/punch/punch2.php"
-   "Accept-Encoding" "gzip, deflate"
-   "Accept-Language" "en-US,en;q=0.9,he;q=0.8"
-   "Cookie" ""})
-
-(def ^:private update-days-referer-url "http://checkin.timewatch.co.il/punch/editwh2.php?ie=%s&e=%s&d=%s&jd=%s&tl=%s")
-(def ^:private update-days-url "http://checkin.timewatch.co.il/punch/editwh3.php")
-
 (def ^:private date-formatter (time-format/formatters :year-month-day))
-
-(def ^:private hour-format (time-format/formatter "HH:mm"))
 
 (defn- build-hours
   [starting-hour ending-hour]
@@ -97,38 +84,21 @@
    :xhh0 (format "%02d" (time/hour ending-hour))
    :xmm0 (format "%02d" (time/minute ending-hour))})
 
-(let [regular-start-hour "08:30"
+(let [hour-format (time-format/formatter "HH:mm")
+      regular-start-hour "08:30"
       michael-start-hour "12:30"]
   (defn- update-day-request
     [{:keys [user-id company-id michael?]} working-hours edited-day-str]
     (let [starting-hour (time-format/parse hour-format (if michael? michael-start-hour regular-start-hour))
           ending-hour (time/plus starting-hour (time/hours (time/hour working-hours)) (time/minutes (time/minute working-hours)))
           hours (build-hours starting-hour ending-hour)]
-      (merge hours
-             {:e user-id
-              :tl user-id
-              :c company-id
-              :d edited-day-str
-              :jd edited-day-str
-              :atypehidden "0"
-              :inclcontracts "1"
-              :job "14095"
-              :allowabsence "3"
-              :allowremarks "0"
-              :task0 "0"
-              :what0 "1"
-              :task1 "0"
-              :what1 "1"
-              :task2 "0"
-              :what2 "1"
-              :task3 "0"
-              :what3 "1"
-              :task4 "0"
-              :what4 "1"
-              :excuse "0"
-              :atype "0"
-              :B1.x "43"
-              :B1.y "13"}))))
+      (-> (merge (get-in @config [:requests :update-day])
+                 hours)
+          (assoc :d edited-day-str
+                 :jd edited-day-str
+                 :e user-id
+                 :tl user-id
+                 :c company-id)))))
 
 (defn- requested-month
   [{:keys [month-override]}]
@@ -147,7 +117,7 @@
 (defn- parse-working-hours
   [^String hours]
   (when hours
-    (time-format/parse hour-format hours)))
+    (time-format/parse (time-format/formatter "hh:mm") hours)))
 
 (defn- tr->date-map
   [row]
@@ -167,16 +137,15 @@
          (map tr->date-map)
          (filter :working-hours))))
 
-(def ^:private dates-table-url "http://checkin.timewatch.co.il/punch/editwh.php?ee=%s&e=%s&m=%02d&y=%d")
 (defn- month-mapping
   [{:keys [user-id company-id cookies]} start-date]
-  (let [url (format dates-table-url
+  (let [url (format (get-in @config [:urls :dates-table])
                     user-id
                     company-id
                     (time/month start-date)
                     (time/year start-date))
         response (checked-request! client/post url
-                                   {:headers (assoc post-login-headers
+                                   {:headers (assoc (get-in @config [:headers :post-login])
                                                     "Cookie" cookies
                                                     "Referer" url)})]
     (build-month-plan (:body response))))
@@ -188,12 +157,17 @@
         month-mapping (month-mapping request start-date)]
     (doseq [{:keys [date working-hours]} month-mapping]
       (let [edited-day-str (time-format/unparse date-formatter date)
-            referer (format update-days-referer-url company-id user-id edited-day-str first-month-day-str user-id)
-            response (checked-request! client/post update-days-url
-                                       {:headers (assoc post-login-headers
-                                                        "Cookie" cookies
-                                                        "Referer" referer)
-                                        :form-params (update-day-request request working-hours edited-day-str)})]
+            referer (format (get-in @config [:urls :update-days-referer])
+                            company-id
+                            user-id
+                            edited-day-str
+                            first-month-day-str
+                            user-id)
+            response (client/post (get-in @config [:urls :update-days])
+                                  {:headers (assoc (get-in @config [:headers :post-login])
+                                                   "Cookie" cookies
+                                                   "Referer" referer)
+                                   :form-params (update-day-request request working-hours edited-day-str)})]
         (Thread/sleep 1000)
         (println "updating:" edited-day-str)))))
 
@@ -212,7 +186,7 @@
     :id :michael?]
    ["-n" "--next-month" "fill next month"
     :id :next-month?]
-   ["-p" "--previous-month" "fill previous month"
+   ["-q" "--previous-month" "fill previous month"
     :id :previous-month?]
    ["-h" "--help"]])
 
