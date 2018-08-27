@@ -7,6 +7,8 @@
                  [cheshire "5.8.0"]
                  [clj-time "0.14.4"]
                  [clj-http "3.9.0"]
+                 [hickory "0.7.1"]
+                 [org.clojure/core.incubator "0.1.4"]
                  [org.clojure/tools.cli "0.3.7"]]
   :main clock-in.core
   :aot [clock-in.core])
