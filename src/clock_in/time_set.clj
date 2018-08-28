@@ -22,19 +22,26 @@
 
 (defn- cookies
   [cookies-map]
-  (str "ie=" (get-in cookies-map ["ie" :value]) "; iee=" (get-in cookies-map ["iee" :value])
-       "; lang=" (get-in cookies-map ["lang" :value])))
+  (when (and (cookies-map "ie")
+             (cookies-map "iee")
+             (cookies-map "lang"))
+    (str "ie=" (get-in cookies-map ["ie" :value]) "; iee=" (get-in cookies-map ["iee" :value])
+         "; lang=" (get-in cookies-map ["lang" :value]))))
 
 (def ^:private login-query-str "comp=%s&name=%s&pw=%s&B1.x=-425&B1.y=-354")
 (defn login
   [user-num password company-id]
-  (when-let [response (utils/checked-request! client/post
-                                              (get-in @utils/config [:urls :time-watch-login])
-                                              (assoc (get-in @utils/config [:headers :login-map])
-                                                     :body (format login-query-str company-id user-num password)))]
-    {:cookies (cookies (response :cookies))
-     :user-id (user-id (response :body))
-     :company-id company-id}))
+  (let [response (utils/checked-request! client/post
+                                         (get-in @utils/config [:urls :time-watch-login])
+                                         (assoc (get-in @utils/config [:headers :login-map])
+                                                :body (format login-query-str company-id user-num password)))
+        cookies (cookies (response :cookies))
+        user-id (user-id (response :body))]
+    (if-not (and cookies user-id)
+      (utils/exit 1 "ERROR! cookies or user-id could not be retrieved")
+      {:cookies cookies
+       :user-id user-id
+       :company-id company-id})))
 
 (def ^:private date-formatter (time-format/formatters :year-month-day))
 

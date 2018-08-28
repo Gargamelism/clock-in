@@ -10,12 +10,13 @@
 
 (defn remove-extension
   [^String file-name]
-  (subs file-name 0 (str/index-of file-name ".")))
+  (if-let [dot-idx (str/index-of file-name ".")]
+    (subs file-name 0 dot-idx)
+    file-name))
 
 (defn status-ok?
   [status]
-  (when (< status 400)
-    true))
+  (boolean (< status 400)))
 
 (defn checked-request!
   [fnc url headers]

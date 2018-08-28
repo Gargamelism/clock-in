@@ -7,7 +7,7 @@
 
 (defn- required-args?
   [{:keys [user password company]}]
-  (and user password company))
+  (boolean (and user password company)))
 
 (def cli-options
   [["-u" "--user USER" "user number"
@@ -28,10 +28,9 @@
   [options]
   (let [{:keys [next-month? previous-month?]} options]
     (-> (dissoc options :next-month? :previous-month?)
-        (assoc :month-override (cond
-                                 next-month? 1
-                                 previous-month? -1
-                                 :else nil)))))
+        (assoc :month-override (cond next-month? 1
+                                     previous-month? -1
+                                     :else nil)))))
 
 (defn- validate-args
   [args]
