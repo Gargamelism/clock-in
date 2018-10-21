@@ -22,6 +22,8 @@
     :id :next-month?]
    ["-q" "--previous-month" "fill previous month"
     :id :previous-month?]
+   ["-o" "--overwrite-existing" "overwrite dates already filled"
+    :id :overwrite?]
    ["-h" "--help"]])
 
 (defn- process-args

@@ -1,17 +1,13 @@
 (ns clock-in.time-set
-  (:require [clj-time.core :as time]
+  (:require [cheshire.core :as json]
+            [clj-time.core :as time]
             [clj-time.format :as time-format]
             [clj-http.client :as client]
             [clock-in.utils :as utils]
             [clojure.string :as str]
-            [hickory.core :as html]
             [hickory.select :as select]))
 
-(defn- html->hiccup
-  [^String text]
-  (-> text
-      (html/parse)
-      (html/as-hickory)))
+
 
 (def ^:private user-id-key "ixemplee=")
 (defn- user-id
@@ -82,28 +78,52 @@
     [^String date]
     (time-format/parse cell-date-format (subs date 0 date-format-str-len))))
 
-(defn- parse-working-hours
+(defn- parse-required-hours
   [^String hours]
   (when hours
     (time-format/parse (time-format/formatter "hh:mm") hours)))
 
-(defn- tr->date-map
+(defn- clean-strings
+  [strings-map]
+  (reduce-kv (fn [m key val]
+               (assoc m key (utils/clean-string val)))
+             {}
+             strings-map))
+
+(def ^:private dates-header [:date
+                             :day-type
+                             :day-name
+                             :required-hours
+                             :clock-in-1
+                             :clock-out-1
+                             :clock-in-2
+                             :clock-out-2
+                             :clock-in-3
+                             :clock-out-3
+                             :absence-reason
+                             :notes
+                             :actual-hours
+                             :edit])
+(defn- row->row-map
   [row]
-  (let [cells-vals (->> (:content row)
-                        (map :content)
-                        (flatten)
-                        (map #(-> %
-                                  (:content)
-                                  (first))))]
-    {:date (date-str->date (nth cells-vals 1))
-     :working-hours (parse-working-hours (nth cells-vals 7))}))
+  (let [raw-map (->> row
+                     (select/select (select/child (select/tag :font)))
+                     (map #(let [content (:content %)]
+                             (if (coll? content)
+                               (first content)
+                               content)))
+                     (zipmap dates-header))]
+    (-> raw-map
+        (update :required-hours parse-required-hours)
+        (update :date date-str->date)
+        (clean-strings))))
 
 (defn- build-month-plan
   [^String html]
-  (let [rows (select/select (select/child (select/class "tr")) (html->hiccup html))]
+  (let [rows (select/select (select/child (select/class "tr"))
+                            (utils/html->hiccup html))]
     (->> rows
-         (map tr->date-map)
-         (filter :working-hours))))
+         (map row->row-map))))
 
 (defn- month-mapping
   [{:keys [user-id company-id cookies]} start-date]
@@ -118,23 +138,34 @@
                                                           "Referer" url)})]
     (build-month-plan (:body response))))
 
+(defn- update-date?
+  [{:keys [required-hours clock-in-1 clock-out-1 clock-in-2 clock-out-2 clock-in-3 clock-out-3 absence-reason]
+    :as today} overwrite-existing?]
+  (when (and (some? required-hours)
+             (or overwrite-existing?
+                 (not (some not-empty
+                            [clock-in-1 clock-out-1 clock-in-2 clock-out-2 clock-in-3 clock-out-3 absence-reason]))))
+    true))
+
 (defn update-days
-  [{:keys [company-id user-id cookies] :as request}]
+  [{:keys [company-id user-id cookies overwrite-existing] :as request}]
   (let [start-date (time/first-day-of-the-month- (requested-month request))
         first-month-day-str (time-format/unparse date-formatter start-date)
         month-mapping (month-mapping request start-date)]
-    (doseq [{:keys [date working-hours]} month-mapping]
-      (let [edited-day-str (time-format/unparse date-formatter date)
-            referer (format (get-in @utils/config [:urls :update-days-referer])
-                            company-id
-                            user-id
-                            edited-day-str
-                            first-month-day-str
-                            user-id)
-            response (client/post (get-in @utils/config [:urls :update-days])
-                                  {:headers (assoc (get-in @utils/config [:headers :post-login])
-                                                   "Cookie" cookies
-                                                   "Referer" referer)
-                                   :form-params (update-day-request request working-hours edited-day-str)})]
-        (Thread/sleep 1000)
-        (println "updating:" edited-day-str)))))
+    (doseq [{:keys [date required-hours] :as today} month-mapping]
+      (let [edited-day-str (time-format/unparse date-formatter date)]
+        (if (update-date? today overwrite-existing)
+          (let [referer (format (get-in @utils/config [:urls :update-days-referer])
+                                company-id
+                                user-id
+                                edited-day-str
+                                first-month-day-str
+                                user-id)
+                response (client/post (get-in @utils/config [:urls :update-days])
+                                      {:headers (assoc (get-in @utils/config [:headers :post-login])
+                                                       "Cookie" cookies
+                                                       "Referer" referer)
+                                       :form-params (update-day-request request required-hours edited-day-str)})]
+            (println "updating:" edited-day-str)
+            (Thread/sleep 1000))
+          (println "skipping:" edited-day-str))))))

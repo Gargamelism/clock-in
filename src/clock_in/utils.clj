@@ -1,7 +1,8 @@
 (ns clock-in.utils
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [hickory.core :as html]))
 
 (defn exit
   [status msg]
@@ -37,3 +38,19 @@
         (exit 1 (format "Couldn't open '%s': %s\n" resource-name (.getMessage e))))
       (catch RuntimeException e
         (exit 1 (format "Error parsing edn file '%s': %s\n" resource-name (.getMessage e)))))))
+
+(defn clean-string
+  [^String string]
+  (if (string? string)
+    (-> string
+        (str/replace #"[^\x00-\x7F]" "")
+        (str/replace #"[\p{Cntrl}&&[^\r\n\t]]" "")
+        (str/replace #"\p{C}" "")
+        (str/trim))
+    string))
+
+(defn html->hiccup
+  [^String text]
+  (-> text
+      (html/parse)
+      (html/as-hickory)))

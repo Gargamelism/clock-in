@@ -17,7 +17,19 @@
                           {:name "status-ok? not ok"
                            :fn utils/status-ok?
                            :args [400]
-                           :expected false}])
+                           :expected false}
+                          {:name "clean-string change"
+                           :fn utils/clean-string
+                           :args [" 1 23 \n"]
+                           :expected "1 23"}
+                          {:name "clean-string ignore"
+                           :fn utils/clean-string
+                           :args [3]
+                           :expected 3}
+                          {:name "clean-string don't change"
+                           :fn utils/clean-string
+                           :args ["2 2 2"]
+                           :expected "2 2 2"}])
 
 (deftest utils-unit-tests
   (doseq [{:keys [name fn args expected]} scenarios]
