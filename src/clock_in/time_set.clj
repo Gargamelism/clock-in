@@ -48,12 +48,10 @@
    :xhh0 (format "%02d" (time/hour ending-hour))
    :xmm0 (format "%02d" (time/minute ending-hour))})
 
-(let [hour-format (time-format/formatter "HH:mm")
-      regular-start-hour "08:30"
-      michael-start-hour "12:30"]
+(let [hour-format (time-format/formatter "HH:mm")]
   (defn- update-day-request
-    [{:keys [user-id company-id michael?]} working-hours edited-day-str]
-    (let [starting-hour (time-format/parse hour-format (if michael? michael-start-hour regular-start-hour))
+    [{:keys [user-id company-id start-time]} working-hours edited-day-str]
+    (let [starting-hour (time-format/parse hour-format start-time)
           ending-hour (time/plus starting-hour (time/hours (time/hour working-hours)) (time/minutes (time/minute working-hours)))
           hours (build-hours starting-hour ending-hour)]
       (-> (merge (get-in @utils/config [:requests :update-day])
@@ -148,13 +146,13 @@
     true))
 
 (defn update-days
-  [{:keys [company-id user-id cookies overwrite-existing] :as request}]
+  [{:keys [company-id user-id cookies overwrite?] :as request}]
   (let [start-date (time/first-day-of-the-month- (requested-month request))
         first-month-day-str (time-format/unparse date-formatter start-date)
         month-mapping (month-mapping request start-date)]
     (doseq [{:keys [date required-hours] :as today} month-mapping]
       (let [edited-day-str (time-format/unparse date-formatter date)]
-        (if (update-date? today overwrite-existing)
+        (if (update-date? today overwrite?)
           (let [referer (format (get-in @utils/config [:urls :update-days-referer])
                                 company-id
                                 user-id

@@ -5,14 +5,14 @@ A Clojure program to automatically update time-watches coming and going hours.
 ## Usage
 
 Download the jar and run it.\
-Basic example: ```java -jar clock-in.jar -u <USER-NUM> -p <PASSWORD> -c <COMPANY-ID>```.\
+Basic example: `java -jar clock-in.jar -u <USER-NUM> -p <PASSWORD> -c <COMPANY-ID>`.\
 In case you watch Netflix instead of going to work in the morning/bla bla bla and come to work at 12:30
-```java -jar clock-in.jar --michael -u <USER-NUM> -p <PASSWORD> -c <COMPANY-ID>```.
+`java -jar clock-in.jar --michael -u <USER-NUM> -p <PASSWORD> -c <COMPANY-ID>`.
 
 No args will provide the a help string.
 
-Filled times are 8:30am - 17:30 Sunday-Thursday, unless michael, in that case 12:30-21:30.\
-Filled month is current unless using the ```--next-month``` or ```--previous-month``` flags.
+Filled times are 8:30am - 17:30 Sunday-Thursday, unless stated using `--start-time 09:30` or `--michael`, in that case 12:30-21:30.\
+Filled month is current unless using the `--next-month` or `--previous-month` flags.
 
 ## License
 

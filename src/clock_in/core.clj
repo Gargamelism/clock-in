@@ -16,6 +16,8 @@
     :id :password]
    ["-c" "--company COMPANY" "company number"
     :id :company]
+   ["-t" "--start-time TIME" "work from time <TIME>. Time examples '08:15', '21:15'"
+    :id :start-time]
    ["-m" "--michael" "work 12:30-21:30"
     :id :michael?]
    ["-n" "--next-month" "fill next month"
@@ -28,11 +30,15 @@
 
 (defn- process-args
   [options]
-  (let [{:keys [next-month? previous-month?]} options]
+  (let [{:keys [next-month? previous-month? start-time michael?]} options]
     (-> (dissoc options :next-month? :previous-month?)
         (assoc :month-override (cond next-month? 1
                                      previous-month? -1
-                                     :else nil)))))
+                                     :else nil))
+        (assoc :start-time (cond
+                             start-time start-time
+                             michael? "12:30"
+                             :else "08:30")))))
 
 (defn- validate-args
   [args]
