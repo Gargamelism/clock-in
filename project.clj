@@ -1,4 +1,4 @@
-(defproject clock-in "0.3.0"
+(defproject clock-in "0.3.1"
   :description "script to automate time filling in timewatch"
   :url "https://github.com/Gargamelism/clock-in"
   :license {:name "Eclipse Public License"
