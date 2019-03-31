@@ -1,4 +1,4 @@
 {:time-watch-login "https://checkin.timewatch.co.il/punch/punch2.php"
- :update-days-referer "http://checkin.timewatch.co.il/punch/editwh2.php?ie=%s&e=%s&d=%s&jd=%s&tl=%s"
- :update-days "http://checkin.timewatch.co.il/punch/editwh3.php"
- :dates-table "http://checkin.timewatch.co.il/punch/editwh.php?ee=%s&e=%s&m=%02d&y=%d"}
+ :update-days-referer "https://checkin.timewatch.co.il/punch/editwh2.php?ie=%s&e=%s&d=%s&jd=%s&tl=%s"
+ :update-days "https://checkin.timewatch.co.il/punch/editwh3.php"
+ :dates-table "https://checkin.timewatch.co.il/punch/editwh.php?ee=%s&e=%s&m=%02d&y=%d"}
